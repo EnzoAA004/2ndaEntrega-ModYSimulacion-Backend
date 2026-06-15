@@ -1,168 +1,105 @@
 # Wastewater Sentinel Backend
 
-API FastAPI para vigilancia epidemiológica temprana mediante análisis de aguas residuales. Incluye carga de mediciones, datos demo, analítica epidemiológica, simulaciones de sistemas dinámicos, estabilidad local, bifurcación, diagramas de fase, riesgo tipo Lyapunov y calibración inicial desde datos históricos.
+API FastAPI para vigilancia epidemiologica temprana mediante analisis de aguas residuales. Incluye carga de mediciones, datos demo, analitica epidemiologica, simulaciones de sistemas dinamicos, estabilidad local, bifurcacion, diagramas de fase, riesgo tipo Lyapunov, calibracion desde datos historicos y prediccion aplicada.
 
 ## Stack
 
 - Python 3.11+
-- FastAPI + Uvicorn
+- FastAPI y Uvicorn
 - SQLAlchemy 2
 - PostgreSQL
 - Pydantic 2
 - NumPy, Pandas, SciPy
-- python-dotenv
 - Pytest
 
-## Instalación
+## Instalacion local
 
-```bash
-cd backend
-python -m venv .venv
-.venv\Scripts\activate
-pip install -r requirements.txt
-copy .env.example .env
-```
+1. Entrar a la carpeta backend.
+2. Crear entorno virtual.
+3. Instalar requirements.
+4. Crear archivo de entorno a partir de .env.example.
+5. Ejecutar el servidor con Uvicorn.
 
-Editá `.env` con tu conexión PostgreSQL:
+La documentacion interactiva queda disponible en `/docs` y el health check en `/api/health`.
 
-```env
-DATABASE_URL=postgresql://user:password@localhost:5432/wastewater_sentinel
-BACKEND_CORS_ORIGINS=["http://localhost:5173","http://localhost:3000"]
-APP_NAME=Wastewater Sentinel
-ENVIRONMENT=development
-```
+## Endpoints disponibles
 
-Para una prueba rápida sin PostgreSQL, si no definís `DATABASE_URL` el backend usa SQLite local.
+### Mediciones y dataset
 
-## PostgreSQL local
+- GET /api/measurements
+- POST /api/measurements
+- GET /api/measurements/locations
+- GET /api/measurements/latest
+- POST /api/datasets/upload
+- POST /api/datasets/seed-demo
+- GET /api/datasets/summary
 
-```bash
-createdb wastewater_sentinel
-```
+### Analitica actual
 
-O con Docker:
+- GET /api/analytics/overview
+- GET /api/analytics/location/{location_name}
+- GET /api/analytics/risk-table
 
-```bash
-docker run --name wastewater-postgres -e POSTGRES_PASSWORD=password -e POSTGRES_USER=user -e POSTGRES_DB=wastewater_sentinel -p 5432:5432 -d postgres:16
-```
+### Analitica predictiva avanzada
 
-Las tablas se crean automáticamente al iniciar la app. Para producción se recomienda sumar Alembic.
+- GET /api/analytics/location/{location_name}/forecast
+- GET /api/analytics/predictive-ranking
+- GET /api/analytics/map-risk
+- GET /api/analytics/report
+- GET /api/analytics/report/html
+- GET /api/analytics/export/measurements.csv
 
-## Correr servidor
+### Simulaciones
 
-```bash
-uvicorn app.main:app --reload
-```
-
-Swagger queda disponible en:
-
-http://localhost:8000/docs
-
-Health check:
-
-```bash
-curl http://localhost:8000/api/health
-```
-
-## Endpoints principales
-
-- `GET /api/health`
-- `GET /api/measurements`
-- `POST /api/measurements`
-- `GET /api/measurements/locations`
-- `GET /api/measurements/latest`
-- `POST /api/datasets/upload`
-- `POST /api/datasets/seed-demo`
-- `GET /api/datasets/summary`
-- `GET /api/analytics/overview`
-- `GET /api/analytics/location/{location_name}`
-- `GET /api/analytics/risk-table`
-- `POST /api/simulations/viral-decay-1d`
-- `POST /api/simulations/infection-wastewater-2d`
-- `POST /api/simulations/non-homogeneous-event`
-- `POST /api/simulations/bifurcation`
-- `POST /api/simulations/phase-diagram`
-- `POST /api/simulations/lyapunov-risk`
-- `POST /api/simulations/calibrate`
+- POST /api/simulations/viral-decay-1d
+- POST /api/simulations/infection-wastewater-2d
+- POST /api/simulations/non-homogeneous-event
+- POST /api/simulations/scenario-compare
+- POST /api/simulations/bifurcation
+- POST /api/simulations/phase-diagram
+- POST /api/simulations/lyapunov-risk
+- POST /api/simulations/calibrate
 
 ## Datos demo
 
-`POST /api/datasets/seed-demo` inserta 720 mediciones:
+El endpoint seed demo inserta 720 mediciones para cuatro ubicaciones: Buenos Aires Norte, Buenos Aires Sur, Cordoba Central y Mendoza Oeste. Cada ubicacion tiene 180 dias con tendencia, ruido, lluvia, dilucion, temperatura estacional, brotes artificiales y casos clinicos retrasados.
 
-- Buenos Aires - Planta Norte
-- Buenos Aires - Planta Sur
-- Córdoba - Planta Central
-- Mendoza - Planta Oeste
+## Modelos matematicos
 
-Cada ubicación tiene 180 días con tendencia, ruido, lluvia, dilución, temperatura estacional, brotes artificiales y casos clínicos retrasados 7-10 días respecto de la señal viral.
+### Modelo 1D
 
-## Modelos matemáticos
+dV/dt = S - kV - dV.
 
-### Viral decay 1D
+Representa la evolucion de carga viral en aguas residuales. El equilibrio es V* = S / (k+d). Si k+d es positivo, el equilibrio es estable.
 
-```text
-dV/dt = S - kV - dV
-V* = S / (k + d)
-```
+### Modelo 2D
 
-Métodos disponibles: `euler`, `heun`, `rk4`.
+dI/dt = beta I(1 - I/K) - gamma I.
 
-Ejemplo:
+dV/dt = alpha I - (k+d)V.
 
-```json
-{
-  "S": 50000,
-  "k": 0.08,
-  "d": 0.04,
-  "V0": 10000,
-  "t_final": 60,
-  "step": 1,
-  "method": "rk4",
-  "save": true
-}
-```
+Vincula infectados estimados con carga viral observada. El backend calcula equilibrios, jacobiano, autovalores, estabilidad local y riesgo temporal.
 
-### Infection-wastewater 2D
+### Prediccion aplicada
 
-```text
-dI/dt = beta I (1 - I/K) - gamma I
-dV/dt = alpha I - (k+d)V
-```
+El forecast ajusta una tendencia log-lineal sobre la carga viral historica reciente. Devuelve prediccion base, banda de incertidumbre, escenario de mitigacion, escenario de crecimiento alto, fechas de cruce de umbral, tasa de crecimiento, tiempo de duplicacion y recomendacion automatica.
 
-Calcula equilibrios, jacobiano, autovalores, clasificación local y riesgo temporal.
+### Ranking predictivo
 
-Ejemplo:
+El ranking predictivo ejecuta predicciones para todas las ubicaciones y ordena por score. El score combina riesgo proyectado, crecimiento esperado, magnitud maxima y cruce de umbrales.
 
-```json
-{
-  "beta": 0.28,
-  "K": 100000,
-  "gamma": 0.08,
-  "alpha": 40,
-  "k": 0.08,
-  "d": 0.04,
-  "I0": 100,
-  "V0": 10000,
-  "t_final": 90,
-  "step": 1,
-  "method": "rk4",
-  "save": true
-}
-```
+### Mapa operativo
 
-## Tests
+El mapa operativo devuelve una vista resumida por ubicacion con riesgo actual, riesgo proyectado y score predictivo. Sirve para alimentar el panel visual del frontend.
 
-```bash
-pytest
-```
+### Calibracion
 
-Los tests cubren métodos numéricos, clasificación de riesgo y simulaciones principales.
+La calibracion estima parametros desde datos historicos y devuelve payloads listos para correr simulaciones 1D y 2D.
 
-## Deploy en Render
+## Reportes
 
-1. Crear una base PostgreSQL en Render.
-2. Crear un Web Service apuntando al repo.
-3. Root directory: `backend`.
-4. Build command: `pip install -r requirements.txt`.
-5. Start command: `uvicorn app.main:app --host 0.0.0.0 --port $PORT`.
-6. Configurar `DATABASE_URL`, `BACKEND_CORS_ORIGINS`, `APP_NAME` y `ENVIRONMENT`.
+El backend permite generar reporte ejecutivo JSON, reporte HTML imprimible y exportacion CSV de mediciones.
+
+## Deploy
+
+En produccion se debe configurar la base PostgreSQL, los origenes permitidos por CORS y las variables de entorno del servicio. No se deben subir credenciales reales al repositorio.
