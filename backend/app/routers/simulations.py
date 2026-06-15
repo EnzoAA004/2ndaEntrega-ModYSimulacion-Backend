@@ -1,3 +1,5 @@
+from typing import Any
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
@@ -13,7 +15,7 @@ from app.schemas import (
     SimulationResult,
     ViralDecayRequest,
 )
-from app.services import calibration_service, simulation_service
+from app.services import calibration_service, scenario_service, simulation_service
 
 router = APIRouter(prefix="/simulations", tags=["simulations"])
 
@@ -36,6 +38,11 @@ def infection_wastewater(payload: InfectionWastewaterRequest, db: Session = Depe
 @router.post("/non-homogeneous-event", response_model=SimulationResult)
 def non_homogeneous_event(payload: NonHomogeneousEventRequest, db: Session = Depends(get_db)):
     return simulation_service.non_homogeneous_event(payload, db)
+
+
+@router.post("/scenario-compare")
+def scenario_compare(payload: dict[str, Any]):
+    return scenario_service.scenario_compare(payload)
 
 
 @router.post("/bifurcation")
