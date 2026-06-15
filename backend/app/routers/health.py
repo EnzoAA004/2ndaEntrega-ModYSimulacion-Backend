@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Response
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
@@ -18,3 +18,7 @@ def health(db: Session = Depends(get_db)):
         status = "disconnected"
     return {"status": "ok", "app": settings.app_name, "environment": settings.environment, "database": status}
 
+
+@router.head("")
+def health_head():
+    return Response(status_code=200)
