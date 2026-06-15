@@ -5,12 +5,12 @@ from datetime import datetime, timezone
 from io import StringIO
 
 from fastapi import APIRouter, Depends, Query
-from fastapi.responses import StreamingResponse
+from fastapi.responses import HTMLResponse, StreamingResponse
 from sqlalchemy.orm import Session
 
 from app.dependencies import get_db
 from app.models import WastewaterMeasurement
-from app.services import analytics_service
+from app.services import advanced_analytics_service, analytics_service
 
 router = APIRouter(prefix="/analytics", tags=["analytics"])
 
@@ -18,6 +18,24 @@ router = APIRouter(prefix="/analytics", tags=["analytics"])
 @router.get("/overview")
 def overview(db: Session = Depends(get_db)):
     return analytics_service.overview(db)
+
+
+@router.get("/predictive-ranking")
+def predictive_ranking(
+    horizon: int = Query(21, ge=7, le=90),
+    window: int = Query(45, ge=14, le=180),
+    db: Session = Depends(get_db),
+):
+    return advanced_analytics_service.predictive_ranking(db, horizon=horizon, window=window)
+
+
+@router.get("/map-risk")
+def map_risk(
+    horizon: int = Query(21, ge=7, le=90),
+    window: int = Query(45, ge=14, le=180),
+    db: Session = Depends(get_db),
+):
+    return advanced_analytics_service.map_risk(db, horizon=horizon, window=window)
 
 
 @router.get("/location/{location_name}/forecast")
@@ -42,42 +60,27 @@ def risk_table(db: Session = Depends(get_db)):
 
 @router.get("/report")
 def report(db: Session = Depends(get_db)):
-    overview_data = analytics_service.overview(db)
-    risk_rows = analytics_service.risk_table(db)
+    payload = advanced_analytics_service.executive_report_payload(db)
+    overview_data = payload["overview"]
+    risk_rows = payload["risk_table"]
     critical = [row for row in risk_rows if row.get("risk_level") == "Crítico"]
     high = [row for row in risk_rows if row.get("risk_level") in {"Alto", "Crítico"}]
     early = [row for row in risk_rows if row.get("early_warning")]
-    recommendations = []
-    if not overview_data.get("total_measurements"):
-        recommendations.append("Cargar datos demo o CSV real para activar el análisis.")
-    if critical:
-        recommendations.append("Priorizar ubicaciones críticas y revisar tendencia de 7 y 14 días.")
-    if early:
-        recommendations.append("Contrastar alertas tempranas de aguas residuales con casos clínicos rezagados.")
-    if not recommendations:
-        recommendations.append("Mantener monitoreo periódico y comparar escenarios de intervención.")
     return {
-        "generated_at": datetime.now(timezone.utc).isoformat(),
+        **payload,
         "title": "Wastewater Sentinel - Reporte ejecutivo",
-        "overview": overview_data,
-        "risk_table": risk_rows,
         "summary": {
             "critical_locations": len(critical),
             "high_or_critical_locations": len(high),
             "early_warning_locations": len(early),
             "highest_risk_location": overview_data.get("highest_risk_location"),
         },
-        "recommendations": recommendations,
-        "academic_mapping": [
-            {"topic": "Sistemas autónomos 1D", "application": "Decaimiento y equilibrio de carga viral."},
-            {"topic": "Sistemas no homogéneos", "application": "Eventos externos, shocks y dilución por lluvia."},
-            {"topic": "Sistemas no lineales 2D", "application": "Interacción infectados-carga viral."},
-            {"topic": "Bifurcación", "application": "Umbral beta = gamma."},
-            {"topic": "Lyapunov", "application": "Función V_risk y región segura."},
-            {"topic": "Métodos numéricos", "application": "Comparación Euler, Heun y RK4."},
-            {"topic": "Predicción aplicada", "application": "Regresión log-lineal de carga viral y escenarios predictivos."},
-        ],
     }
+
+
+@router.get("/report/html", response_class=HTMLResponse)
+def report_html(db: Session = Depends(get_db)):
+    return HTMLResponse(advanced_analytics_service.executive_report_html(db))
 
 
 @router.get("/export/measurements.csv")
