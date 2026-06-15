@@ -64,6 +64,13 @@ class MeasurementFilters(BaseModel):
     offset: int = Field(default=0, ge=0)
 
 
+class PaginatedMeasurements(BaseModel):
+    total: int
+    limit: int
+    offset: int
+    items: list[MeasurementRead]
+
+
 class DatasetSummary(BaseModel):
     total_measurements: int
     active_locations: int
