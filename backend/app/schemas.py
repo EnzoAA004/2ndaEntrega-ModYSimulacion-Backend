@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from datetime import date, datetime
 from typing import Any, Literal
 
@@ -6,11 +8,11 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 class MeasurementBase(BaseModel):
     sample_date: date
-    location_name: str = Field(min_length=1, max_length=160)
-    city: str = Field(min_length=1, max_length=120)
-    country: str = Field(min_length=1, max_length=120)
-    latitude: float | None = Field(default=None, ge=-90, le=90)
-    longitude: float | None = Field(default=None, ge=-180, le=180)
+    location_name: str = Field(min_length=1)
+    city: str = Field(default="Unknown")
+    country: str = Field(default="Unknown")
+    latitude: float | None = None
+    longitude: float | None = None
     population_served: int = Field(gt=0)
     flow_rate_m3_day: float = Field(gt=0)
     viral_concentration_gc_l: float = Field(ge=0)
@@ -28,11 +30,11 @@ class MeasurementCreate(MeasurementBase):
 
 class MeasurementUpdate(BaseModel):
     sample_date: date | None = None
-    location_name: str | None = Field(default=None, min_length=1, max_length=160)
-    city: str | None = Field(default=None, min_length=1, max_length=120)
-    country: str | None = Field(default=None, min_length=1, max_length=120)
-    latitude: float | None = Field(default=None, ge=-90, le=90)
-    longitude: float | None = Field(default=None, ge=-180, le=180)
+    location_name: str | None = None
+    city: str | None = None
+    country: str | None = None
+    latitude: float | None = None
+    longitude: float | None = None
     population_served: int | None = Field(default=None, gt=0)
     flow_rate_m3_day: float | None = Field(default=None, gt=0)
     viral_concentration_gc_l: float | None = Field(default=None, ge=0)
@@ -47,7 +49,7 @@ class MeasurementUpdate(BaseModel):
 class MeasurementRead(MeasurementBase):
     id: int
     created_at: datetime
-    updated_at: datetime | None = None
+    updated_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -58,21 +60,8 @@ class MeasurementFilters(BaseModel):
     country: str | None = None
     date_from: date | None = None
     date_to: date | None = None
-    limit: int = Field(default=100, ge=1, le=1000)
+    limit: int = Field(default=200, ge=1, le=5000)
     offset: int = Field(default=0, ge=0)
-
-    @model_validator(mode="after")
-    def validate_dates(self):
-        if self.date_from and self.date_to and self.date_from > self.date_to:
-            raise ValueError("date_from must be before date_to")
-        return self
-
-
-class PaginatedMeasurements(BaseModel):
-    total: int
-    limit: int
-    offset: int
-    items: list[MeasurementRead]
 
 
 class DatasetSummary(BaseModel):
@@ -84,30 +73,10 @@ class DatasetSummary(BaseModel):
     latest_locations: list[dict[str, Any]]
 
 
-class EquilibriumResult(BaseModel):
-    values: dict[str, float]
-    stable: bool | None = None
-    classification: str | None = None
-
-
-class StabilityResult(BaseModel):
-    classification: str
-    eigenvalues: list[dict[str, float]] | None = None
-    explanation: str | None = None
-
-
-class RiskResult(BaseModel):
-    risk_level: str
-    risk_score: float
-    trend_7d: float | None = None
-    trend_14d: float | None = None
-    early_warning: bool = False
-    explanation: str
-
-
 class SimulationRequest(BaseModel):
+    save: bool = False
     name: str | None = None
-    save: bool = True
+    location_name: str | None = None
 
 
 class ViralDecayRequest(SimulationRequest):
@@ -160,7 +129,7 @@ class NonHomogeneousEventRequest(SimulationRequest):
     shock_magnitude: float = Field(default=0, ge=0)
     rainfall_start: float | None = Field(default=None, ge=0)
     rainfall_end: float | None = Field(default=None, ge=0)
-    dilution_multiplier: float = Field(default=1, ge=1)
+    dilution_multiplier: float = Field(default=1, gt=0)
     k: float = Field(ge=0)
     d: float = Field(ge=0)
     V0: float = Field(ge=0)
@@ -243,3 +212,5 @@ class SimulationRunRead(BaseModel):
     stability: Any | None = None
     risk: Any | None = None
     created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
