@@ -9,7 +9,6 @@ from sqlalchemy.orm import Session
 from app.models import ImportedDataset, WastewaterMeasurement
 from app.schemas import MeasurementCreate
 from app.services.demo_data_service import generate_demo_measurements
-from app.services.measurement_service import create_measurement
 from app.utils.json_utils import dumps
 from app.utils.math_utils import safe_float, safe_int
 
@@ -41,6 +40,10 @@ def _map_columns(df: pd.DataFrame) -> dict[str, str]:
     return mapped
 
 
+def _measurement_from_payload(payload: MeasurementCreate) -> WastewaterMeasurement:
+    return WastewaterMeasurement(**payload.model_dump())
+
+
 def import_csv(db: Session, content: bytes, filename: str, source_name: str | None = None) -> dict:
     try:
         df = pd.read_csv(BytesIO(content))
@@ -54,7 +57,7 @@ def import_csv(db: Session, content: bytes, filename: str, source_name: str | No
     if missing:
         raise ValueError(f"Faltan columnas requeridas o compatibles: {', '.join(missing)}")
 
-    created = []
+    rows: list[WastewaterMeasurement] = []
     errors = []
     for idx, row in df.iterrows():
         try:
@@ -75,36 +78,37 @@ def import_csv(db: Session, content: bytes, filename: str, source_name: str | No
                 clinical_cases=safe_int(row.get("clinical_cases"), None),
                 notes=str(row.get("notes")) if "notes" in row and not pd.isna(row.get("notes")) else None,
             )
-            created.append(create_measurement(db, payload))
+            rows.append(_measurement_from_payload(payload))
         except Exception as exc:
             errors.append({"row": int(idx) + 2, "error": str(exc)})
-    if not created:
+    if not rows:
         raise ValueError(f"No se pudo importar ninguna fila. Errores: {errors[:5]}")
 
     dataset = ImportedDataset(
         filename=filename,
         source_name=source_name,
-        rows_imported=len(created),
+        rows_imported=len(rows),
         columns_json=dumps({"original": list(df.columns), "mapped": mapped}),
     )
+    db.add_all(rows)
     db.add(dataset)
     db.commit()
-    return {"rows_imported": len(created), "errors": errors, "dataset_id": dataset.id, "columns_mapped": mapped}
+    return {"rows_imported": len(rows), "errors": errors, "dataset_id": dataset.id, "columns_mapped": mapped}
 
 
 def seed_demo(db: Session) -> dict:
     payloads = generate_demo_measurements()
-    for payload in payloads:
-        create_measurement(db, payload)
+    rows = [_measurement_from_payload(payload) for payload in payloads]
     dataset = ImportedDataset(
         filename="demo-generated",
         source_name="Wastewater Sentinel demo",
-        rows_imported=len(payloads),
+        rows_imported=len(rows),
         columns_json=dumps(list(MeasurementCreate.model_fields.keys())),
     )
+    db.add_all(rows)
     db.add(dataset)
     db.commit()
-    return {"rows_inserted": len(payloads), "locations": 4, "days": 180}
+    return {"rows_inserted": len(rows), "locations": 4, "days": 180}
 
 
 def summary(db: Session) -> dict:
@@ -130,4 +134,3 @@ def summary(db: Session) -> dict:
         "max_viral_concentration": float(max_viral) if max_viral is not None else None,
         "latest_locations": [{"location_name": row[0], "latest_sample_date": row[1]} for row in latest],
     }
-
