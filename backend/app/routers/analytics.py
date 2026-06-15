@@ -4,7 +4,7 @@ import csv
 from datetime import datetime, timezone
 from io import StringIO
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
@@ -18,6 +18,16 @@ router = APIRouter(prefix="/analytics", tags=["analytics"])
 @router.get("/overview")
 def overview(db: Session = Depends(get_db)):
     return analytics_service.overview(db)
+
+
+@router.get("/location/{location_name}/forecast")
+def location_forecast(
+    location_name: str,
+    horizon: int = Query(21, ge=7, le=90),
+    window: int = Query(45, ge=14, le=180),
+    db: Session = Depends(get_db),
+):
+    return analytics_service.forecast_location(db, location_name, horizon=horizon, window=window)
 
 
 @router.get("/location/{location_name}")
@@ -65,6 +75,7 @@ def report(db: Session = Depends(get_db)):
             {"topic": "Bifurcación", "application": "Umbral beta = gamma."},
             {"topic": "Lyapunov", "application": "Función V_risk y región segura."},
             {"topic": "Métodos numéricos", "application": "Comparación Euler, Heun y RK4."},
+            {"topic": "Predicción aplicada", "application": "Regresión log-lineal de carga viral y escenarios predictivos."},
         ],
     }
 
