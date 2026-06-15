@@ -217,6 +217,8 @@ class CalibrationRequest(BaseModel):
 
 
 class SimulationResult(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
     model_type: str
     parameters: dict[str, Any]
     initial_conditions: dict[str, Any]
